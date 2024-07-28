@@ -21,7 +21,7 @@ const commands = Object.freeze({
 const messages = Object.freeze({
   start: 'Добро пожаловать! Выберите одну из кнопок ниже для выполнения вашего расчета.',
   restart: 'Выберите одну из кнопок ниже для выполнения вашего расчета.',
-  smsAmount: 'Введите количество sms.',
+  smsAmount: 'Введите количество смс.',
   writeAmountFromBoard: 'Введите число с доски.',
   wrongValue: 'Введите корректное число для расчета. Для разделения десятичных дробей используйте точку'
 });
@@ -78,7 +78,7 @@ export class Telegram {
         ctx.session.isColdClose = true;
 
         await ctx.reply(
-          messages.wrongValue,
+          messages.writeAmountFromBoard,
           Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
         );
       });
@@ -87,7 +87,7 @@ export class Telegram {
         ctx.session.isPolice = true;
 
         await ctx.reply(
-          messages.wrongValue,
+          messages.writeAmountFromBoard,
           Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
         );
       });
@@ -122,14 +122,14 @@ export class Telegram {
 
         if (ctx.session.isPolice) {
           await ctx.reply(
-            `Зарплата - ${this.getSalary(number, 4)} UAH`,
+            `Зарплата с учетом ставки - ${this.getSalary(number, 4)} UAH`,
             Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
           );
         }
 
         if (ctx.session.isColdClose) {
           await ctx.reply(
-            `Зарплата - ${this.getSalary(number, 7)} UAH`,
+            `Зарплата с учетом ставки - ${this.getSalary(number, 7)} UAH`,
             Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
           );
         }
