@@ -1,37 +1,48 @@
 import { Markup, session, Telegraf } from 'telegraf';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import fs from 'node:fs';
 
-const rubCurrency = 95;
-const uahCurrency = 33;
+import { getCurrency, getSalary, getSmsSalary, updateCurrency } from './utils/index.js';
+import { messages } from './constants/messages.js';
+import { buttons } from './constants/buttons.js';
+import { methods, refresh } from './methods/methods.js';
 
-const buttons = Object.freeze({
-  sms: 'Смс',
-  coldClose: 'Холодка Клоуз',
-  police: 'Мент',
-  restart: 'Начать сначала'
-});
-
-const commands = Object.freeze({
-  start: Markup.keyboard([
-    Markup.button.callback(buttons.sms, `sms`),
-    Markup.button.callback(buttons.coldClose, `coldClose`),
-    Markup.button.callback(buttons.police, `coldClose`)
-  ])
-});
-
-const messages = Object.freeze({
-  start: 'Добро пожаловать! Выберите одну из кнопок ниже для выполнения вашего расчета.',
-  restart: 'Выберите одну из кнопок ниже для выполнения вашего расчета.',
-  smsAmount: 'Введите количество смс.',
-  writeAmountFromBoard: 'Введите число с доски.',
-  wrongValue: 'Введите корректное число для расчета. Для разделения десятичных дробей используйте точку'
-});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// const dataDir = path.join(__dirname);
+const dataDir = '/app/data';
+const telegramDataFileName = 'telegram-data.json';
+const baseTelegramData = {
+  rubCurrency: 95,
+  uahCurrency: 33
+};
 
 export class Telegram {
+  #regex = /^[0-9]+$/;
+
   #token = '7276327541:AAHqoCtH57fXbwCshwYgDprFZkWLf4ZEZUc';
+  // #token = '7117585256:AAFiIYcwi12MzUIGwUVHduRlw41_L8IZKYk';
 
   #tgBot = new Telegraf(this.#token);
 
-  start() {
+  async initTelegramDataFile() {
+    try {
+      const jsonData = await fs.promises.readFile(`${dataDir}/${telegramDataFileName}`, 'utf-8');
+      return JSON.parse(jsonData);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        await fs.promises.writeFile(`${dataDir}/${telegramDataFileName}`, JSON.stringify(baseTelegramData), 'utf-8');
+        return {};
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  async start() {
+    await this.initTelegramDataFile();
+
     try {
       this.#tgBot.use(session());
 
@@ -43,63 +54,21 @@ export class Telegram {
         return await next();
       });
 
-      this.#tgBot.command('start', async (ctx) => {
-        ctx.session.isSms = false;
-        ctx.session.smsAmount = 0;
-        ctx.smsNumberFromDesk = 0;
-        ctx.session.isColdClose = false;
-        ctx.session.isPolice = false;
+      for (const [ key, value ] of Object.entries(methods)) {
+        this.#tgBot.hears(key, value);
+      }
 
-        await ctx.reply(messages.start, commands.start, { columns: 3 });
-      });
-
-      this.#tgBot.hears(buttons.restart, async (ctx) => {
-        ctx.session.isSms = false;
-        ctx.session.smsAmount = 0;
-        ctx.smsNumberFromDesk = 0;
-        ctx.session.isColdClose = false;
-        ctx.session.isPolice = false;
-
-        await ctx.reply(messages.restart, commands.start, { columns: 3 });
-      });
-
-      this.#tgBot.hears(buttons.sms, async (ctx) => {
-        ctx.session.isSms = true;
-        ctx.session.smsAmount = 0;
-        ctx.smsNumberFromDesk = 0;
-
-        await ctx.reply(
-          messages.smsAmount,
-          Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
-        );
-      });
-
-      this.#tgBot.hears(buttons.coldClose, async (ctx) => {
-        ctx.session.isColdClose = true;
-
-        await ctx.reply(
-          messages.writeAmountFromBoard,
-          Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
-        );
-      });
-
-      this.#tgBot.hears(buttons.police, async (ctx) => {
-        ctx.session.isPolice = true;
-
-        await ctx.reply(
-          messages.writeAmountFromBoard,
-          Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
-        );
-      });
+      this.#tgBot.command(buttons.start, refresh);
 
       this.#tgBot.on('text', async (ctx) => {
-        if (isNaN(ctx.message.text)) {
+        if (!this.#regex.test(ctx.message.text)) {
           await ctx.reply(messages.wrongValue);
 
           return;
         }
 
-        const number = parseInt(ctx.message.text);
+        const number = ctx.message.text;
+        const data = await getCurrency(dataDir, telegramDataFileName);
 
         if (ctx.session.isSms) {
           if (!ctx.session.smsAmount) {
@@ -112,7 +81,7 @@ export class Telegram {
 
           if (ctx.session.smsAmount) {
             await ctx.reply(
-              `Зарплата с учетом ${ctx.session.smsAmount} sms - ${this.getSmsSalary(ctx.session.smsAmount, number)} UAH`,
+              `Зарплата с учетом ${ctx.session.smsAmount} смс - ${getSmsSalary(ctx.session.smsAmount, number, data.rubCurrency, data.uahCurrency)} UAH`,
               Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
             );
           } else {
@@ -122,16 +91,30 @@ export class Telegram {
 
         if (ctx.session.isPolice) {
           await ctx.reply(
-            `Зарплата с учетом ставки - ${this.getSalary(number, 4)} UAH`,
+            `Зарплата с учетом ставки - ${getSalary(number, 4, data.rubCurrency, data.uahCurrency)} UAH`,
             Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
           );
         }
 
         if (ctx.session.isColdClose) {
           await ctx.reply(
-            `Зарплата с учетом ставки - ${this.getSalary(number, 7)} UAH`,
+            `Зарплата с учетом ставки - ${getSalary(number, 7, data.rubCurrency, data.uahCurrency)} UAH`,
             Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
           );
+        }
+
+        if (ctx.session.isChangeCurrencyActive) {
+          if (ctx.session.uahCurrencyActive) {
+            await updateCurrency({ uahCurrency: number });
+
+            await ctx.reply(messages.uahCurrencyUpdated, Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 }));
+          }
+
+          if (ctx.session.rubCurrencyActive) {
+            await updateCurrency({ rubCurrency: number });
+
+            await ctx.reply(messages.rubCurrencyUpdated, Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 }));
+          }
         }
       });
 
@@ -141,13 +124,5 @@ export class Telegram {
     } catch (error) {
       console.log('Произошла ошибка', error?.message);
     }
-  }
-
-  getSmsSalary(smsAmount, amountFromDesk) {
-    return Math.floor((((amountFromDesk / 100 * 2) / rubCurrency) * uahCurrency) + (smsAmount * 100)).toFixed(2);
-  }
-
-  getSalary(value, percentage) {
-    return Math.floor((((value / 100 * percentage) / rubCurrency) * uahCurrency + 3000)).toFixed(2);
   }
 }

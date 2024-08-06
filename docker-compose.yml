@@ -1,0 +1,16 @@
+version: '3.8'
+services:
+  salary-calculation-bot:
+    build: .
+    image: salary-calculation-bot
+    command: npm run start
+    restart: unless-stopped
+#    env_file:
+#      - .env
+    ports:
+      - "3600:3600"
+    volumes:
+      - bot_data:/app/data
+
+volumes:
+  bot_data:
