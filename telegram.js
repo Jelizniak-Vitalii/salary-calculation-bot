@@ -3,7 +3,7 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import fs from 'node:fs';
 
-import { getCurrency, getSalary, getSmsSalary, updateCurrency } from './utils/index.js';
+import { calculateExpression, getCurrency, getSalary, getSmsSalary, updateCurrency } from './utils/index.js';
 import { messages } from './constants/messages.js';
 import { buttons } from './constants/buttons.js';
 import { methods, refresh } from './methods/methods.js';
@@ -19,8 +19,6 @@ const baseTelegramData = {
 };
 
 export class Telegram {
-  #regex = /^[0-9]+$/;
-
   #token = '7276327541:AAHqoCtH57fXbwCshwYgDprFZkWLf4ZEZUc';
   // #token = '7117585256:AAFiIYcwi12MzUIGwUVHduRlw41_L8IZKYk';
 
@@ -61,13 +59,14 @@ export class Telegram {
       this.#tgBot.command(buttons.start, refresh);
 
       this.#tgBot.on('text', async (ctx) => {
-        if (!this.#regex.test(ctx.message.text)) {
+        const number = calculateExpression(ctx.message.text);
+
+        if (typeof number === 'boolean') {
           await ctx.reply(messages.wrongValue);
 
           return;
         }
 
-        const number = ctx.message.text;
         const data = await getCurrency(dataDir, telegramDataFileName);
 
         if (ctx.session.isSms) {
