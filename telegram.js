@@ -7,6 +7,7 @@ import { calculateExpression, getCurrency, getSalary, getSmsSalary, updateCurren
 import { messages } from './constants/messages.js';
 import { buttons } from './constants/buttons.js';
 import { methods, refresh } from './methods/methods.js';
+import { logger, LogLevel } from './services/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,69 +60,68 @@ export class Telegram {
       this.#tgBot.command(buttons.start, refresh);
 
       this.#tgBot.on('text', async (ctx) => {
-        const number = calculateExpression(ctx.message.text);
+        try {
+          logger(`Пользователь ввел текст: ${ctx.message.text}, User name - ${ctx.message.chat.username ?? ''}, Chat id - ${ctx.message.chat.id}, First name - ${ctx.message.chat.first_name || ''}`);
 
-        if (typeof number === 'boolean') {
-          await ctx.reply(messages.wrongValue);
+          const number = calculateExpression(ctx.message.text);
+          const data = await getCurrency(dataDir, telegramDataFileName);
 
-          return;
-        }
+          if (ctx.session.isSms) {
+            if (!ctx.session.smsAmount) {
+              ctx.session.smsAmount = number;
 
-        const data = await getCurrency(dataDir, telegramDataFileName);
+              await ctx.reply(messages.writeAmountFromBoard);
 
-        if (ctx.session.isSms) {
-          if (!ctx.session.smsAmount) {
-            ctx.session.smsAmount = number;
+              return;
+            }
 
-            await ctx.reply(messages.writeAmountFromBoard);
-
-            return;
+            if (ctx.session.smsAmount) {
+              await ctx.reply(
+                `Зарплата с учетом ${ctx.session.smsAmount} смс - ${getSmsSalary(ctx.session.smsAmount, number, data.rubCurrency, data.uahCurrency)} UAH`,
+                Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
+              );
+            } else {
+              await ctx.reply(messages.smsAmount);
+            }
           }
 
-          if (ctx.session.smsAmount) {
+          if (ctx.session.isPolice) {
             await ctx.reply(
-              `Зарплата с учетом ${ctx.session.smsAmount} смс - ${getSmsSalary(ctx.session.smsAmount, number, data.rubCurrency, data.uahCurrency)} UAH`,
+              `Зарплата с учетом ставки - ${getSalary(number, 4, data.rubCurrency, data.uahCurrency)} UAH`,
               Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
             );
-          } else {
-            await ctx.reply(messages.smsAmount);
-          }
-        }
-
-        if (ctx.session.isPolice) {
-          await ctx.reply(
-            `Зарплата с учетом ставки - ${getSalary(number, 4, data.rubCurrency, data.uahCurrency)} UAH`,
-            Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
-          );
-        }
-
-        if (ctx.session.isColdClose) {
-          await ctx.reply(
-            `Зарплата с учетом ставки - ${getSalary(number, 7, data.rubCurrency, data.uahCurrency)} UAH`,
-            Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
-          );
-        }
-
-        if (ctx.session.isChangeCurrencyActive) {
-          if (ctx.session.uahCurrencyActive) {
-            await updateCurrency({ uahCurrency: number });
-
-            await ctx.reply(messages.uahCurrencyUpdated, Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 }));
           }
 
-          if (ctx.session.rubCurrencyActive) {
-            await updateCurrency({ rubCurrency: number });
-
-            await ctx.reply(messages.rubCurrencyUpdated, Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 }));
+          if (ctx.session.isColdClose) {
+            await ctx.reply(
+              `Зарплата с учетом ставки - ${getSalary(number, 7, data.rubCurrency, data.uahCurrency)} UAH`,
+              Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 })
+            );
           }
+
+          if (ctx.session.isChangeCurrencyActive) {
+            if (ctx.session.uahCurrencyActive) {
+              await updateCurrency({ uahCurrency: number });
+
+              await ctx.reply(messages.uahCurrencyUpdated, Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 }));
+            }
+
+            if (ctx.session.rubCurrencyActive) {
+              await updateCurrency({ rubCurrency: number });
+
+              await ctx.reply(messages.rubCurrencyUpdated, Markup.keyboard([ Markup.button.callback(buttons.restart, `restart`) ], { columns: 2 }));
+            }
+          }
+        } catch (error) {
+          await ctx.reply(error.message);
         }
       });
 
       this.#tgBot.launch()
-        .then(() => console.log('Бот успешно запущен'))
-        .catch(() => new Error('Произошла ошибка при запуске бота'));
+        .then(() => logger('Бот успешно запущен'))
+        .catch(() => logger('Произошла ошибка при запуске бота', LogLevel.ERROR));
     } catch (error) {
-      console.log('Произошла ошибка', error?.message);
+      logger(`Произошла ошибка ${error?.message}`, LogLevel.ERROR);
     }
   }
 }

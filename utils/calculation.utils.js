@@ -1,4 +1,6 @@
 import { evaluate } from 'mathjs';
+import { logger, LogLevel } from '../services/logger.js';
+import { messages } from '../constants/messages.js';
 
 export function getSmsSalary(smsAmount, amountFromDesk, rubCurrency, uahCurrency) {
   return Math.floor((((amountFromDesk / 100 * 2) / rubCurrency) * uahCurrency) + (smsAmount * 100)).toFixed(2);
@@ -9,17 +11,19 @@ export function getSalary(value, percentage, rubCurrency, uahCurrency) {
 }
 
 export function calculateExpression(input) {
-  const regex = /^[0-9]+(\.[0-9]+)?$/;
-
-  input = input.trim();
-
-  if (regex.test(input)) {
-    return parseFloat(input);
-  }
+  const regex = /^-?[0-9]+(\.[0-9]+)?([eE]-?[0-9]+)?$/;
 
   try {
+    input = input.replace(/\s+/g, '');
+
+    if (!regex.test(input)) {
+      throw new Error(`Некорректный ввод: ${input}`);
+    }
+
     return evaluate(input);
   } catch (error) {
-    return false;
+    logger(`Ошибка: ${error.message}`, LogLevel.ERROR);
+
+    throw new Error(messages.wrongValue);
   }
 }

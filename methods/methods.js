@@ -3,6 +3,7 @@ import { Markup } from 'telegraf';
 import { buttons } from '../constants/buttons.js';
 import { admins } from '../constants/admins.js';
 import { getCurrency } from '../utils/index.js';
+import { logger } from '../services/logger.js';
 
 const commands = Object.freeze({
   start: [
@@ -12,7 +13,13 @@ const commands = Object.freeze({
   ]
 });
 
+function getMethodMessage(ctx) {
+  return `Нажатие на кнопку "${ctx.message.text}", User name - ${ctx.message.chat.username ?? ''}, Chat id - ${ctx.message.chat.id}, First name - ${ctx.message.chat.first_name || ''}`;
+}
+
 export const refresh = async (ctx) => {
+  logger(getMethodMessage(ctx));
+
   ctx.session.isSms = false;
   ctx.session.smsAmount = 0;
   ctx.smsNumberFromDesk = 0;
@@ -33,8 +40,11 @@ export const refresh = async (ctx) => {
 };
 
 const sms = async (ctx) => {
+  logger(getMethodMessage(ctx));
+
   ctx.session.isSms = true;
   ctx.session.smsAmount = 0;
+
   ctx.smsNumberFromDesk = 0;
 
   await ctx.reply(
@@ -44,6 +54,8 @@ const sms = async (ctx) => {
 };
 
 const coldClose = async (ctx) => {
+  logger(getMethodMessage(ctx));
+
   ctx.session.isColdClose = true;
 
   await ctx.reply(
@@ -53,6 +65,8 @@ const coldClose = async (ctx) => {
 };
 
 const police = async (ctx) => {
+  logger(getMethodMessage(ctx));
+
   ctx.session.isPolice = true;
 
   await ctx.reply(
@@ -62,8 +76,9 @@ const police = async (ctx) => {
 };
 
 const changeCurrency = async (ctx) => {
-  const data = await getCurrency().catch(error => console.log(error));
+  logger(getMethodMessage(ctx));
 
+  const data = await getCurrency().catch(error => console.log(error));
   ctx.session.isChangeCurrencyActive = true;
 
   await ctx.reply(
@@ -78,6 +93,7 @@ const changeCurrency = async (ctx) => {
 };
 
 const uahCurrency = async (ctx) => {
+  logger(getMethodMessage(ctx));
   ctx.session.uahCurrencyActive = true;
 
   await ctx.reply(
@@ -87,6 +103,8 @@ const uahCurrency = async (ctx) => {
 };
 
 const rubCurrency = async (ctx) => {
+  logger(getMethodMessage(ctx));
+
   ctx.session.rubCurrencyActive = true;
 
   await ctx.reply(
