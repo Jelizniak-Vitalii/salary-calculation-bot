@@ -11,7 +11,7 @@ export function getSalary(value, percentage, rubCurrency, uahCurrency) {
 }
 
 export function calculateExpression(input) {
-  const regex = /^-?[0-9]+(\.[0-9]+)?([eE]-?[0-9]+)?$/;
+  const regex = /^[-+*/^()0-9.\s]*$/;
 
   try {
     input = input.replace(/\s+/g, '');
